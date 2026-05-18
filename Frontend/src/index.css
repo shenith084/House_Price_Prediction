@@ -656,53 +656,6 @@ body::before {
 }
 
 /* ===================================================
-   Feature Importance / Chart
-   =================================================== */
-
-.feature-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.feature-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.feature-name {
-  font-size: 0.82rem;
-  font-weight: 600;
-  color: var(--color-text-muted);
-  width: 90px;
-  flex-shrink: 0;
-}
-
-.feature-bar-track {
-  flex: 1;
-  height: 6px;
-  background: rgba(0, 0, 0, 0.05);
-  border-radius: 100px;
-  overflow: hidden;
-}
-
-.feature-bar-fill {
-  height: 100%;
-  border-radius: 100px;
-  background: var(--grad-primary);
-  transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.feature-pct {
-  font-size: 0.78rem;
-  font-weight: 700;
-  color: var(--color-primary);
-  width: 38px;
-  text-align: right;
-}
-
-/* ===================================================
    Tips Section
    =================================================== */
 

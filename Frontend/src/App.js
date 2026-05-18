@@ -96,19 +96,6 @@ const OCEAN_OPTIONS = [
   'ISLAND',
 ];
 
-// Feature importance (based on typical California Housing RF model)
-const FEATURE_IMPORTANCE = [
-  { name: 'median_income',      pct: 46 },
-  { name: 'ocean_proximity',    pct: 14 },
-  { name: 'latitude',           pct: 11 },
-  { name: 'longitude',          pct: 9  },
-  { name: 'housing_median_age', pct: 7  },
-  { name: 'total_rooms',        pct: 6  },
-  { name: 'households',         pct: 4  },
-  { name: 'population',         pct: 2  },
-  { name: 'total_bedrooms',     pct: 1  },
-];
-
 // Default form values
 const DEFAULT_VALUES = {
   longitude:          '-118.25',
@@ -170,40 +157,6 @@ function Hero() {
   );
 }
 
-
-
-function FeatureImportanceCard() {
-  return (
-    <div className="card" role="region" aria-label="Feature importance">
-      <div className="card-header">
-        <div className="card-icon purple" aria-hidden="true">📊</div>
-        <div>
-          <div className="card-title">Feature Importance</div>
-          <div className="card-subtitle">What drives the prediction</div>
-        </div>
-      </div>
-      <div className="card-body">
-        <div className="feature-list">
-          {FEATURE_IMPORTANCE.map(f => (
-            <div className="feature-item" key={f.name}>
-              <div className="feature-name">{f.name.replace('_', ' ')}</div>
-              <div
-                className="feature-bar-track"
-                role="progressbar"
-                aria-valuenow={f.pct}
-                aria-valuemin={0}
-                aria-valuemax={100}
-              >
-                <div className="feature-bar-fill" style={{ width: `${f.pct}%` }} />
-              </div>
-              <div className="feature-pct">{f.pct}%</div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
 
 function ResultPanel({ result }) {
   if (!result) {
@@ -457,8 +410,6 @@ export default function App() {
               <ResultPanel result={result} />
             </div>
 
-            {/* Feature Importance */}
-            <FeatureImportanceCard />
           </div>
         </div>
 
