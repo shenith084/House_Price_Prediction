@@ -11,9 +11,9 @@ const NUMERIC_FEATURES = [
     label: 'Longitude',
     icon: '📍',
     placeholder: '-118.25',
-    hint: 'California longitude (−124 to −114)',
-    min: -124.35,
-    max: -114.31,
+    hint: 'Global longitude (−180 to 180)',
+    min: -180.00,
+    max: 180.00,
     step: 0.01,
   },
   {
@@ -21,9 +21,9 @@ const NUMERIC_FEATURES = [
     label: 'Latitude',
     icon: '🌐',
     placeholder: '34.05',
-    hint: 'California latitude (32 to 42)',
-    min: 32.54,
-    max: 41.95,
+    hint: 'Global latitude (-90 to 90)',
+    min: -90.00,
+    max: 90.00,
     step: 0.01,
   },
   {
@@ -120,6 +120,124 @@ function priceRange(price) {
   return `${formatUSD(price * 0.92)} – ${formatUSD(price * 1.08)}`;
 }
 
+// ─── Ocean Proximity Auto-Detector ───────────────────────────────────────────
+const CA_COASTLINE = [
+  { lat: 32.53, lng: -117.12 }, // San Diego Border
+  { lat: 32.65, lng: -117.24 }, // Point Loma
+  { lat: 32.85, lng: -117.27 }, // La Jolla
+  { lat: 33.00, lng: -117.29 }, // Encinitas
+  { lat: 33.20, lng: -117.39 }, // Oceanside
+  { lat: 33.45, lng: -117.65 }, // San Clemente
+  { lat: 33.60, lng: -117.90 }, // Newport Beach
+  { lat: 33.72, lng: -118.15 }, // Long Beach
+  { lat: 33.72, lng: -118.40 }, // Palos Verdes
+  { lat: 33.85, lng: -118.40 }, // Redondo Beach
+  { lat: 34.00, lng: -118.50 }, // Santa Monica
+  { lat: 34.02, lng: -118.80 }, // Malibu
+  { lat: 34.15, lng: -119.20 }, // Port Hueneme
+  { lat: 34.27, lng: -119.30 }, // Ventura
+  { lat: 34.40, lng: -119.70 }, // Santa Barbara
+  { lat: 34.45, lng: -120.10 }, // Gaviota
+  { lat: 34.45, lng: -120.47 }, // Point Conception
+  { lat: 34.58, lng: -120.65 }, // Point Arguello
+  { lat: 34.90, lng: -120.66 }, // Guadalupe
+  { lat: 35.14, lng: -120.64 }, // Pismo Beach
+  { lat: 35.37, lng: -120.86 }, // Morro Bay
+  { lat: 35.70, lng: -121.30 }, // San Simeon
+  { lat: 36.00, lng: -121.60 }, // Big Sur South
+  { lat: 36.30, lng: -121.90 }, // Point Sur
+  { lat: 36.62, lng: -121.93 }, // Monterey
+  { lat: 36.96, lng: -122.02 }, // Santa Cruz
+  { lat: 37.20, lng: -122.40 }, // Ano Nuevo
+  { lat: 37.46, lng: -122.44 }, // Half Moon Bay
+  { lat: 37.77, lng: -122.51 }, // San Francisco Ocean Beach
+  { lat: 38.00, lng: -123.00 }, // Point Reyes
+  { lat: 38.30, lng: -123.05 }, // Bodega Bay
+  { lat: 38.60, lng: -123.35 }, // Sea Ranch
+  { lat: 38.95, lng: -123.74 }, // Point Arena
+  { lat: 39.44, lng: -123.81 }, // Fort Bragg
+  { lat: 39.85, lng: -123.95 }, // Westport
+  { lat: 40.20, lng: -124.35 }, // Cape Mendocino South
+  { lat: 40.44, lng: -124.41 }, // Cape Mendocino
+  { lat: 40.80, lng: -124.16 }, // Eureka
+  { lat: 41.05, lng: -124.15 }, // Trinidad
+  { lat: 41.50, lng: -124.08 }, // Klamath
+  { lat: 41.75, lng: -124.20 }, // Crescent City
+  { lat: 42.00, lng: -124.21 }  // Pelican State Beach (OR border)
+];
+
+function getDistanceInMiles(lat1, lon1, lat2, lon2) {
+  const R = 3958.8; // Radius of the Earth in miles
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+function guessOceanProximity(lat, lng) {
+  // Check if outside California boundaries completely
+  if (lat < 32.5 || lat > 42.0 || lng < -124.5 || lng > -114.0) {
+    return 'INLAND';
+  }
+
+  // 1. ISLAND — Santa Catalina & Channel Islands
+  const ISLANDS = [
+    { lat: 33.45, lng: -118.48, r: 0.22 }, // Santa Catalina
+    { lat: 32.83, lng: -118.58, r: 0.18 }, // San Clemente
+    { lat: 33.25, lng: -119.50, r: 0.18 }, // San Nicolas
+    { lat: 34.03, lng: -120.00, r: 0.22 }, // San Miguel
+    { lat: 33.97, lng: -119.69, r: 0.22 }, // Santa Cruz
+    { lat: 34.00, lng: -119.38, r: 0.18 }, // Santa Rosa
+    { lat: 34.01, lng: -119.09, r: 0.12 }, // Anacapa
+  ];
+  const cosLat = Math.cos((lat * Math.PI) / 180);
+  for (const isl of ISLANDS) {
+    const d = Math.sqrt((lat - isl.lat) ** 2 + ((lng - isl.lng) * cosLat) ** 2);
+    if (d < isl.r) return 'ISLAND';
+  }
+
+  // 2. NEAR BAY — San Francisco Bay region
+  if (
+    lat >= 37.2 && lat <= 38.25 &&
+    lng >= -122.60 && lng <= -121.75
+  ) {
+    return 'NEAR BAY';
+  }
+
+  // 3. Haversine distance to closest coastline point
+  let minDistance = Infinity;
+  for (const pt of CA_COASTLINE) {
+    const dist = getDistanceInMiles(lat, lng, pt.lat, pt.lng);
+    if (dist < minDistance) {
+      minDistance = dist;
+    }
+  }
+
+  // Very close (under 5 miles)
+  if (minDistance <= 5.0) {
+    return 'NEAR OCEAN';
+  }
+
+  // Far inland
+  if (minDistance > 45.0) {
+    return 'INLAND';
+  }
+
+  // Central Valley exclusion (east of Coast Ranges)
+  if (lat > 35.0 && lng > -121.3) {
+    return 'INLAND';
+  }
+
+  // Otherwise, coastal basin
+  return '<1H OCEAN';
+}
+
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
 function Navbar({ online }) {
@@ -165,7 +283,7 @@ function ResultPanel({ result }) {
         <div className="empty-icon" aria-hidden="true">🏷️</div>
         <div className="empty-title">No Prediction Yet</div>
         <p className="empty-text">
-          Fill in the property details and click "Predict Price" to see the estimated value.
+          Fill in the property details and click "Calculate Valuation" to see the estimated value.
         </p>
       </div>
     );
@@ -311,6 +429,15 @@ function LocationFiller({ onLocationFilled }) {
     debounceRef.current = setTimeout(() => fetchSuggestions(val), 500);
   };
 
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault(); // Prevent form submission
+      if (suggestions && suggestions.length > 0) {
+        handleSelectSuggestion(suggestions[0]);
+      }
+    }
+  };
+
   const handleSelectSuggestion = (item) => {
     const lat = parseFloat(parseFloat(item.lat).toFixed(4));
     const lng = parseFloat(parseFloat(item.lon).toFixed(4));
@@ -372,6 +499,7 @@ function LocationFiller({ onLocationFilled }) {
                 placeholder="e.g. Los Angeles, California…"
                 value={addressQuery}
                 onChange={handleAddressChange}
+                onKeyDown={handleKeyDown}
                 onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
                 autoComplete="off"
               />
@@ -404,20 +532,66 @@ function LocationFiller({ onLocationFilled }) {
 
 // ─── Main App ─────────────────────────────────────────────────────────────────
 
+const STEPS = [
+  { label: '📍 Location', desc: 'Set coordinates & ocean distance' },
+  { label: '🏠 Building', desc: 'Age, rooms & bedroom layout' },
+  { label: '📊 Area Stats', desc: 'Demographics & local income' },
+];
+
 export default function App() {
   const [formData, setFormData] = useState({ ...DEFAULT_VALUES });
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [online, setOnline] = useState(null);
+  const [activeStep, setActiveStep] = useState(0);
 
-  // Called by LocationFiller when a location is chosen
+  // Called by LocationFiller and InteractiveMap when a location is chosen
   const handleLocationFilled = (lat, lng) => {
     setFormData(prev => ({
       ...prev,
       latitude: String(lat),
       longitude: String(lng),
+      ocean_proximity: guessOceanProximity(lat, lng),
     }));
+  };
+
+  const getStepFields = (step) => {
+    if (step === 0) return ['longitude', 'latitude', 'ocean_proximity'];
+    if (step === 1) return ['housing_median_age', 'total_rooms', 'total_bedrooms'];
+    if (step === 2) return ['population', 'households', 'median_income'];
+    return [];
+  };
+
+  const isStepValid = (step) => {
+    const fields = getStepFields(step);
+    for (const f of fields) {
+      if (f === 'ocean_proximity') continue;
+      const val = parseFloat(formData[f]);
+      if (isNaN(val)) {
+        return false;
+      }
+    }
+    return true;
+  };
+
+  const handleTabClick = (index) => {
+    setError(null);
+    setActiveStep(index);
+  };
+
+  const handleNext = () => {
+    if (isStepValid(activeStep)) {
+      setError(null);
+      setActiveStep(prev => prev + 1);
+    } else {
+      setError('Please fill in all details in this step before proceeding.');
+    }
+  };
+
+  const handleBack = () => {
+    setError(null);
+    setActiveStep(prev => prev - 1);
   };
 
   // Check API health on mount
@@ -435,10 +609,22 @@ export default function App() {
     setFormData({ ...DEFAULT_VALUES });
     setResult(null);
     setError(null);
+    setActiveStep(0);
   };
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
+    if (e && e.preventDefault) e.preventDefault();
+
+    // 1. Verify all steps have inputs (soft validation)
+    for (let i = 0; i < STEPS.length; i++) {
+      if (!isStepValid(i)) {
+        setActiveStep(i);
+        setError(`Please complete all fields in Step ${i + 1} correctly before proceeding.`);
+        return;
+      }
+    }
+
+
     setLoading(true);
     setError(null);
     setResult(null);
@@ -470,6 +656,16 @@ export default function App() {
     }
   };
 
+  const handleFormKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      // Prevent automatic prediction/submission on intermediate steps
+      if (activeStep < STEPS.length - 1) {
+        e.preventDefault();
+        handleNext();
+      }
+    }
+  };
+
   return (
     <div className="app-wrapper">
       <Navbar online={online === true} />
@@ -481,95 +677,206 @@ export default function App() {
           {/* ── Prediction Form ── */}
           <div>
             <div className="card">
-              <div className="card-header">
-                <div className="card-icon blue" aria-hidden="true">🔍</div>
-                <div>
-                  <div className="card-title">Property Details</div>
-                  <div className="card-subtitle">9 features · California housing data</div>
-                </div>
-              </div>
-              <div className="card-body">
-                <LocationFiller onLocationFilled={handleLocationFilled} />
-
-                <form id="prediction-form" onSubmit={handleSubmit} noValidate>
-                  <div className="form-grid">
-                    {NUMERIC_FEATURES.map(f => (
-                      <div className="form-group" key={f.key}>
-                        <label className="form-label" htmlFor={`input-${f.key}`}>
-                          {f.icon} {f.label}
-                        </label>
-                        <div className="input-wrapper">
-                          <input
-                            id={`input-${f.key}`}
-                            name={f.key}
-                            type="number"
-                            className="form-input"
-                            placeholder={f.placeholder}
-                            value={formData[f.key]}
-                            onChange={handleChange}
-                            min={f.min}
-                            max={f.max}
-                            step={f.step}
-                            required
-                            aria-describedby={`hint-${f.key}`}
-                          />
-                        </div>
-                        <span id={`hint-${f.key}`} className="form-hint">{f.hint}</span>
-                      </div>
-                    ))}
-
-                    {/* Ocean Proximity — categorical */}
-                    <div className="form-group" style={{ gridColumn: '1 / -1' }}>
-                      <label className="form-label" htmlFor="input-ocean_proximity">
-                        🌊 Ocean Proximity
-                      </label>
-                      <div className="input-wrapper">
-                        <select
-                          id="input-ocean_proximity"
-                          name="ocean_proximity"
-                          className="form-input form-select"
-                          value={formData.ocean_proximity}
-                          onChange={handleChange}
-                          required
-                        >
-                          {OCEAN_OPTIONS.map(opt => (
-                            <option key={opt} value={opt}>{opt}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <span className="form-hint">Distance category to the nearest ocean</span>
+              {/* Premium Wizard Tab Header */}
+              <div className="wizard-tabs">
+                {STEPS.map((step, idx) => (
+                  <button
+                    key={step.label}
+                    type="button"
+                    className={`wizard-tab-btn ${activeStep === idx ? 'active' : ''}`}
+                    onClick={() => handleTabClick(idx)}
+                  >
+                    <div className="tab-num">{idx + 1}</div>
+                    <div className="tab-meta">
+                      <span className="tab-label">{step.label}</span>
+                      <span className="tab-desc">{step.desc}</span>
                     </div>
-                  </div>
+                  </button>
+                ))}
+              </div>
+
+              <div className="card-body">
+                <form id="prediction-form" onSubmit={handleSubmit} onKeyDown={handleFormKeyDown} noValidate>
+                  
+                  {/* STEP 1: LOCATION */}
+                  {activeStep === 0 && (
+                    <div className="step-content animate-fade-in">
+                      <LocationFiller onLocationFilled={handleLocationFilled} />
+
+                      <div className="form-grid" style={{ marginTop: '20px' }}>
+                        {NUMERIC_FEATURES.filter(f => ['longitude', 'latitude'].includes(f.key)).map(f => (
+                          <div className="form-group" key={f.key}>
+                            <label className="form-label" htmlFor={`input-${f.key}`}>
+                              {f.icon} {f.label}
+                            </label>
+                            <div className="input-wrapper">
+                              <input
+                                id={`input-${f.key}`}
+                                name={f.key}
+                                type="number"
+                                className="form-input"
+                                placeholder={f.placeholder}
+                                value={formData[f.key]}
+                                onChange={handleChange}
+                                min={f.min}
+                                max={f.max}
+                                step={0.0001}
+                                required
+                              />
+                            </div>
+                            <span className="form-hint">{f.hint}</span>
+                          </div>
+                        ))}
+
+                        {/* Ocean Proximity */}
+                        <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                          <label className="form-label" htmlFor="input-ocean_proximity">
+                            🌊 Ocean Proximity (Auto-calculated)
+                          </label>
+                          <div className="input-wrapper">
+                            <select
+                              id="input-ocean_proximity"
+                              name="ocean_proximity"
+                              className="form-input form-select"
+                              value={formData.ocean_proximity}
+                              onChange={handleChange}
+                              required
+                            >
+                              {OCEAN_OPTIONS.map(opt => (
+                                <option key={opt} value={opt}>{opt}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <span className="form-hint">Coastal distance classification</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* STEP 2: BUILDING DETAILS */}
+                  {activeStep === 1 && (
+                    <div className="step-content animate-fade-in">
+                      <div className="step-header">
+                        <h3>🏠 Property Architecture</h3>
+                        <p>Configure age and room quantities for the census block group.</p>
+                      </div>
+                      <div className="form-grid">
+                        {NUMERIC_FEATURES.filter(f => ['housing_median_age', 'total_rooms', 'total_bedrooms'].includes(f.key)).map(f => (
+                          <div className="form-group" key={f.key}>
+                            <label className="form-label" htmlFor={`input-${f.key}`}>
+                              {f.icon} {f.label}
+                            </label>
+                            <div className="input-wrapper">
+                              <input
+                                id={`input-${f.key}`}
+                                name={f.key}
+                                type="number"
+                                className="form-input"
+                                placeholder={f.placeholder}
+                                value={formData[f.key]}
+                                onChange={handleChange}
+                                min={f.min}
+                                max={f.max}
+                                step={f.step}
+                                required
+                              />
+                            </div>
+                            <span className="form-hint">{f.hint}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* STEP 3: DEMOGRAPHICS */}
+                  {activeStep === 2 && (
+                    <div className="step-content animate-fade-in">
+                      <div className="step-header">
+                        <h3>📊 Local Demographics</h3>
+                        <p>Configure local block population and median household income details.</p>
+                      </div>
+                      <div className="form-grid">
+                        {NUMERIC_FEATURES.filter(f => ['population', 'households', 'median_income'].includes(f.key)).map(f => (
+                          <div className="form-group" key={f.key}>
+                            <label className="form-label" htmlFor={`input-${f.key}`}>
+                              {f.icon} {f.label}
+                            </label>
+                            <div className="input-wrapper">
+                              <input
+                                id={`input-${f.key}`}
+                                name={f.key}
+                                type="number"
+                                className="form-input"
+                                placeholder={f.placeholder}
+                                value={formData[f.key]}
+                                onChange={handleChange}
+                                min={f.min}
+                                max={f.max}
+                                step={f.step}
+                                required
+                              />
+                            </div>
+                            <span className="form-hint">{f.hint}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   {error && (
-                    <div className="alert alert-error" role="alert">
+                    <div className="alert alert-error" role="alert" style={{ marginTop: '20px' }}>
                       <span>⚠️</span>
                       <span>{error}</span>
                     </div>
                   )}
 
-                  <button
-                    type="submit"
-                    id="predict-btn"
-                    className="btn btn-primary"
-                    disabled={loading}
-                    aria-busy={loading}
-                  >
-                    {loading ? (
-                      <>
-                        <div className="spinner" aria-hidden="true" />
-                        Predicting…
-                      </>
-                    ) : (
-                      <>🚀 Predict Price</>
+                  {/* Form Footer Navigation Controls */}
+                  <div className="wizard-actions">
+                    {activeStep > 0 && (
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        onClick={handleBack}
+                      >
+                        ◀ Back
+                      </button>
                     )}
-                  </button>
+
+                    {activeStep < STEPS.length - 1 ? (
+                      <button
+                        type="button"
+                        className="btn btn-primary"
+                        onClick={handleNext}
+                        style={{ marginLeft: 'auto' }}
+                      >
+                        Next Step ▶
+                      </button>
+                    ) : (
+                      <button
+                        type="submit"
+                        id="predict-btn"
+                        className="btn btn-primary"
+                        disabled={loading}
+                        aria-busy={loading}
+                        style={{ marginLeft: 'auto' }}
+                      >
+                        {loading ? (
+                          <>
+                            <div className="spinner" aria-hidden="true" />
+                            Calculating…
+                          </>
+                        ) : (
+                          <>🚀 Calculate Valuation</>
+                        )}
+                      </button>
+                    )}
+                  </div>
                 </form>
 
                 {result && (
-                  <div style={{ textAlign: 'center', marginTop: '12px' }}>
-                    <button id="reset-btn" className="btn btn-secondary" onClick={handleReset}>
-                      🔄 Reset
+                  <div style={{ textAlign: 'center', marginTop: '20px', paddingTop: '15px', borderTop: '1px solid var(--color-border)' }}>
+                    <button id="reset-btn" className="btn btn-secondary animate-pulse" onClick={handleReset}>
+                      🔄 Clear and Start Over
                     </button>
                   </div>
                 )}
