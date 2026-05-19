@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import './App.css';
 
 // ─── API Configuration ────────────────────────────────────────────────────────
@@ -98,15 +98,15 @@ const OCEAN_OPTIONS = [
 
 // Default form values
 const DEFAULT_VALUES = {
-  longitude:          '-118.25',
-  latitude:           '34.05',
+  longitude: '-118.25',
+  latitude: '34.05',
   housing_median_age: '25',
-  total_rooms:        '2500',
-  total_bedrooms:     '500',
-  population:         '1200',
-  households:         '400',
-  median_income:      '4.5',
-  ocean_proximity:    '<1H OCEAN',
+  total_rooms: '2500',
+  total_bedrooms: '500',
+  population: '1200',
+  households: '400',
+  median_income: '4.5',
+  ocean_proximity: '<1H OCEAN',
 };
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
@@ -192,14 +192,14 @@ function ResultPanel({ result }) {
           <div className="metric-name">Income Tier</div>
           <div className="metric-value">
             {parseFloat(formData.median_income) > 7 ? '🟢 High' :
-             parseFloat(formData.median_income) > 4 ? '🟡 Mid'  : '🔴 Low'}
+              parseFloat(formData.median_income) > 4 ? '🟡 Mid' : '🔴 Low'}
           </div>
         </div>
         <div className="metric-item">
           <div className="metric-name">House Age</div>
           <div className="metric-value">
-            {parseFloat(formData.housing_median_age) < 10 ? '🆕 New'  :
-             parseFloat(formData.housing_median_age) < 30 ? '🏠 Mid'  : '🏚️ Old'}
+            {parseFloat(formData.housing_median_age) < 10 ? '🆕 New' :
+              parseFloat(formData.housing_median_age) < 30 ? '🏠 Mid' : '🏚️ Old'}
           </div>
         </div>
         <div className="metric-item">
@@ -230,14 +230,195 @@ function ResultPanel({ result }) {
   );
 }
 
+// ─── Location Filler ─────────────────────────────────────────────────────────
+
+function LocationFiller({ onLocationFilled }) {
+  const [addressQuery, setAddressQuery] = useState('');
+  const [suggestions, setSuggestions] = useState([]);
+  const [searching, setSearching] = useState(false);
+  const [geoLoading, setGeoLoading] = useState(false);
+  const [geoStatus, setGeoStatus] = useState(null); // 'success' | 'error' | null
+  const [searchStatus, setSearchStatus] = useState(null);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const debounceRef = useRef(null);
+  const wrapperRef = useRef(null);
+
+  // Close suggestions when clicking outside
+  useEffect(() => {
+    const handler = (e) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target)) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  // ── 1. Geolocation ───────────────────────────────────────────────────────────
+  const handleGeolocate = () => {
+    if (!navigator.geolocation) {
+      setGeoStatus('error');
+      return;
+    }
+    setGeoLoading(true);
+    setGeoStatus(null);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const lat = parseFloat(pos.coords.latitude.toFixed(4));
+        const lng = parseFloat(pos.coords.longitude.toFixed(4));
+        onLocationFilled(lat, lng);
+        // Clear address search to avoid confusion — GPS took priority
+        setAddressQuery('');
+        setSuggestions([]);
+        setShowSuggestions(false);
+        setSearchStatus(null);
+        setGeoLoading(false);
+        setGeoStatus('success');
+        setTimeout(() => setGeoStatus(null), 3000);
+      },
+      () => {
+        setGeoLoading(false);
+        setGeoStatus('error');
+        setTimeout(() => setGeoStatus(null), 4000);
+      },
+      { timeout: 10000 }
+    );
+  };
+
+  // ── 2. Address Search (OpenStreetMap Nominatim — free, no API key) ────────────
+  const fetchSuggestions = useCallback(async (query) => {
+    if (!query || query.trim().length < 3) { setSuggestions([]); return; }
+    setSearching(true);
+    try {
+      const url =
+        `https://nominatim.openstreetmap.org/search` +
+        `?q=${encodeURIComponent(query)}&format=json&limit=5&addressdetails=1`;
+      const res = await fetch(url, { headers: { 'Accept-Language': 'en' } });
+      const data = await res.json();
+      setSuggestions(data);
+      setShowSuggestions(true);
+    } catch {
+      setSuggestions([]);
+    } finally {
+      setSearching(false);
+    }
+  }, []);
+
+  const handleAddressChange = (e) => {
+    const val = e.target.value;
+    setAddressQuery(val);
+    clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => fetchSuggestions(val), 500);
+  };
+
+  const handleSelectSuggestion = (item) => {
+    const lat = parseFloat(parseFloat(item.lat).toFixed(4));
+    const lng = parseFloat(parseFloat(item.lon).toFixed(4));
+    setAddressQuery(item.display_name);
+    setSuggestions([]);
+    setShowSuggestions(false);
+    onLocationFilled(lat, lng);
+    setSearchStatus('success');
+    setTimeout(() => setSearchStatus(null), 3000);
+  };
+
+  return (
+    <div className="location-filler">
+      <div className="location-header">
+        <span className="location-subtitle">Auto-fill Longitude &amp; Latitude</span>
+      </div>
+
+      <div className="location-methods">
+        {/* ── Method 1: Current Location ── */}
+        <div className="loc-method">
+          <div className="loc-method-badge">1</div>
+          <div className="loc-method-body">
+            <div className="loc-method-title">📡 Current Location</div>
+            <button
+              id="btn-use-location"
+              type="button"
+              className={`btn-loc ${geoStatus === 'success' ? 'btn-loc-success' :
+                geoStatus === 'error' ? 'btn-loc-error' : ''
+                }`}
+              onClick={handleGeolocate}
+              disabled={geoLoading}
+            >
+              {geoLoading ? (
+                <><div className="loc-spinner" />Detecting…</>
+              ) : geoStatus === 'success' ? (
+                <>✅ Location Detected!</>
+              ) : geoStatus === 'error' ? (
+                <>❌ Permission Denied</>
+              ) : (
+                <>📡 Use My Location</>
+              )}
+            </button>
+          </div>
+        </div>
+
+        <div className="loc-divider"><span>or</span></div>
+
+        {/* ── Method 2: Address Search ── */}
+        <div className="loc-method">
+          <div className="loc-method-badge">2</div>
+          <div className="loc-method-body" ref={wrapperRef} style={{ flex: 1 }}>
+            <div className="loc-method-title">🔍 Address Search</div>
+
+            <div className="address-search-wrap">
+              <input
+                id="address-search-input"
+                type="text"
+                className="address-input"
+                placeholder="e.g. Los Angeles, California…"
+                value={addressQuery}
+                onChange={handleAddressChange}
+                onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
+                autoComplete="off"
+              />
+              {searching && <div className="address-spinner" />}
+              {showSuggestions && suggestions.length > 0 && (
+                <ul className="suggestions-list" role="listbox">
+                  {suggestions.map((item) => (
+                    <li
+                      key={item.place_id}
+                      role="option"
+                      className="suggestion-item"
+                      onMouseDown={() => handleSelectSuggestion(item)}
+                    >
+                      <span className="sug-icon">📍</span>
+                      <span className="sug-text">{item.display_name}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            {searchStatus === 'success' && (
+              <span className="loc-success-msg">✅ Coordinates filled from address!</span>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main App ─────────────────────────────────────────────────────────────────
 
 export default function App() {
   const [formData, setFormData] = useState({ ...DEFAULT_VALUES });
-  const [result, setResult]     = useState(null);
-  const [loading, setLoading]   = useState(false);
-  const [error, setError]       = useState(null);
-  const [online, setOnline]     = useState(null);
+  const [result, setResult] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [online, setOnline] = useState(null);
+
+  // Called by LocationFiller when a location is chosen
+  const handleLocationFilled = (lat, lng) => {
+    setFormData(prev => ({
+      ...prev,
+      latitude: String(lat),
+      longitude: String(lng),
+    }));
+  };
 
   // Check API health on mount
   useEffect(() => {
@@ -308,6 +489,8 @@ export default function App() {
                 </div>
               </div>
               <div className="card-body">
+                <LocationFiller onLocationFilled={handleLocationFilled} />
+
                 <form id="prediction-form" onSubmit={handleSubmit} noValidate>
                   <div className="form-grid">
                     {NUMERIC_FEATURES.map(f => (
