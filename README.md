@@ -87,14 +87,15 @@ The React app will open at: `http://localhost:3000`
 
 ```json
 {
-  "MedInc":     5.0,
-  "HouseAge":   20,
-  "AveRooms":   6.0,
-  "AveBedrms":  1.0,
-  "Population": 1200,
-  "AveOccup":   3.0,
-  "Latitude":   34.5,
-  "Longitude":  -118.0
+  "longitude": -118.25,
+  "latitude": 34.05,
+  "housing_median_age": 25.0,
+  "total_rooms": 2500.0,
+  "total_bedrooms": 500.0,
+  "population": 1200.0,
+  "households": 400.0,
+  "median_income": 4.5,
+  "ocean_proximity": "<1H OCEAN"
 }
 ```
 
@@ -112,28 +113,32 @@ The React app will open at: `http://localhost:3000`
 
 ## 🧠 Model Features
 
-| Feature    | Description                        |
-|------------|------------------------------------|
-| MedInc     | Median income (in $10k units)      |
-| HouseAge   | Median house age in block group    |
-| AveRooms   | Average number of rooms            |
-| AveBedrms  | Average number of bedrooms         |
-| Population | Block group population             |
-| AveOccup   | Average household occupancy        |
-| Latitude   | Geographic latitude                |
-| Longitude  | Geographic longitude               |
+| Feature              | Description                                                             |
+|----------------------|-------------------------------------------------------------------------|
+| `longitude`          | Geographic longitude coordinate of the block                            |
+| `latitude`           | Geographic latitude coordinate of the block                             |
+| `housing_median_age` | Median age of houses in the block group                                 |
+| `total_rooms`        | Total number of rooms in the block group                                |
+| `total_bedrooms`     | Total number of bedrooms in the block group                             |
+| `population`         | Total population in the block group                                     |
+| `households`         | Number of households in the block group                                 |
+| `median_income`      | Median household income in block (in $10,000s, e.g. 4.5 = $45,000)      |
+| `ocean_proximity`    | Coastal distance classification (`<1H OCEAN`, `INLAND`, `NEAR OCEAN`, `NEAR BAY`, `ISLAND`) |
 
 ---
 
 ## 🎨 UI Features
 
-- ✅ Dark glassmorphism design
-- ✅ Responsive layout (mobile-friendly)
-- ✅ Feature importance bar chart
-- ✅ Live API status indicator
-- ✅ Confidence range display
-- ✅ Input validation & error handling
-- ✅ Loading animations
+- ✅ Modern dark glassmorphism wizard interface
+- ✅ Geolocation auto-detection (detect current coordinates)
+- ✅ Auto-fill coordinates via OpenStreetMap address search
+- ✅ Intelligent ocean proximity auto-detector based on GPS coordinates
+- ✅ Form input split into logical steps (Location ➔ Building ➔ Demographics)
+- ✅ Interactive validation & boundary protection
+- ✅ Live API connection status indicator
+- ✅ Value confidence range estimation (+/- 8%)
+- ✅ Smooth loading states and glassmorphism hover animations
+- ✅ Responsive design for desktop, tablet, and mobile screens
 
 ---
 
@@ -143,5 +148,5 @@ The React app will open at: `http://localhost:3000`
 |-----------|---------------------|
 | Frontend  | React 18, Vanilla CSS |
 | Backend   | Flask 3, Flask-CORS |
-| ML        | scikit-learn, numpy |
+| ML        | scikit-learn, numpy, pandas |
 | Font      | Inter + Space Grotesk (Google Fonts) |
